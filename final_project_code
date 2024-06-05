@@ -1,0 +1,978 @@
+<h1>Using the TikTok Research API to access content, meta data and user data of FVD</h1>
+import requests #For making http requests
+import datetime #transforming dates and times
+import pandas as pd #tables and DataFrames
+
+# Step 1: Authenticate and get access token
+def get_access_token():
+    client_key = "CLIENT KEY"
+    client_secret = "CLIENT SECRET"
+    r = requests.post('https://open.tiktokapis.com/v2/oauth/token/', 
+                      headers={'Content-Type': 'application/x-www-form-urlencoded',
+                               'Cache-Control': 'no-cache'
+                               },
+                      data={'client_key': client_key,
+                            'client_secret': client_secret,
+                            'grant_type': 'client_credentials'})
+    access_token = r.json()['access_token'] #output is in json
+    return access_token
+
+access_token = get_access_token() #store the result of calling the function in a global variable
+
+import requests
+import datetime
+import logging
+import time
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+
+# Function to make API requests with retry logic
+def make_api_request(url, headers, data, max_retries=3):
+    retries = 0
+    while retries < max_retries:
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logging.error(f"Failed to fetch data: HTTP {response.status_code}, {response.text}")
+        except Exception as e:
+            logging.error(f"Error while making API request: {e}")
+        retries += 1
+        # Exponential backoff before retrying
+        time.sleep(2 ** retries)
+    return None
+
+    # Step 2a: Fetch videos and metadata from 20211108 to 20231106
+def get_tiktok_videos(username, start_date=None):
+    videos = []
+    url = 'https://open.tiktokapis.com/v2/research/video/query/?fields=id,create_time,video_description,hashtag_names,share_count,view_count,like_count,comment_count,voice_to_text' #parameters found in API docs
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    } #required per API docs
+    
+    if start_date is None:
+        start_date = datetime.datetime(2021, 1, 1)  # Set start date to year of FvD's first post
+    
+    end_date = datetime.datetime.now()
+    #start_date = end_date - datetime.timedelta(days=365)
+
+    while start_date < end_date:
+        current_end_date = min(start_date + datetime.timedelta(days=10), end_date)
+
+        data = {
+            "query": {
+                'and': [{
+                    "operation": "EQ",
+                    "field_name": "username",
+                    "field_values": [username]
+                }]
+            },
+            "max_count": 100,
+            "cursor": 0,
+            "start_date": start_date.strftime("%Y%m%d"),
+            "end_date": current_end_date.strftime("%Y%m%d")
+        }
+
+        logging.info(f"Requesting videos for date range: {start_date.strftime('%Y-%m-%d')} to {current_end_date.strftime('%Y-%m-%d')}")
+        # Log the request data including cursor
+        logging.debug(f"Request Data: {data}")
+
+        response_json = make_api_request(url, headers, data)
+
+        # Log the response JSON
+        logging.debug(f"Response JSON: {response_json}")
+
+        if response_json:
+            for video in response_json.get('data', {}).get('videos', []):
+                videos.append(video)
+
+            # Check if there are more videos
+            if response_json.get('hasMore'):
+                max_cursor = response_json.get('maxCursor')
+                logging.debug(f"Max Cursor Value: {max_cursor}")
+                while response_json.get('hasMore'):
+                    data["cursor"] = max_cursor #Update cursor value
+                    logging.debug(f"Updated Request Data: {data}")
+                    response_json = make_api_request(url, headers, data)
+                    if response_json:
+                        for video in response_json.get('data', {}).get('videos', []):
+                            videos.append(video)
+                        max_cursor = response_json.get('maxCursor')
+                    else:
+                        break
+            else:
+                logging.info("No more videos to fetch.")
+
+        start_date = current_end_date
+
+    return videos
+
+fvd_tiktok_videos = pd.DataFrame(get_tiktok_videos('forumvdemocratie'))
+
+# Step 2b: Fetch videos and metadata from 20231108 to 
+def get_tiktok_videos(username, start_date=None):
+    videos = []
+    url = 'https://open.tiktokapis.com/v2/research/video/query/?fields=id,create_time,video_description,hashtag_names,share_count,view_count,like_count,comment_count,voice_to_text' #parameters found in API docs
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    } #required per API docs
+    
+    if start_date is None:
+        start_date = datetime.datetime(2023, 11, 1)  # Set start date to year of FvD's first post
+    
+    end_date = datetime.datetime.now()
+    #start_date = end_date - datetime.timedelta(days=365)
+
+    while start_date < end_date:
+        current_end_date = min(start_date + datetime.timedelta(days=10), end_date)
+
+        data = {
+            "query": {
+                'and': [{
+                    "operation": "EQ",
+                    "field_name": "username",
+                    "field_values": [username]
+                }]
+            },
+            "max_count": 100,
+            "cursor": 0,
+            "start_date": start_date.strftime("%Y%m%d"),
+            "end_date": current_end_date.strftime("%Y%m%d")
+        }
+
+        logging.info(f"Requesting videos for date range: {start_date.strftime('%Y-%m-%d')} to {current_end_date.strftime('%Y-%m-%d')}")
+        # Log the request data including cursor
+        logging.debug(f"Request Data: {data}")
+
+        response_json = make_api_request(url, headers, data)
+
+        # Log the response JSON
+        logging.debug(f"Response JSON: {response_json}")
+
+        if response_json:
+            for video in response_json.get('data', {}).get('videos', []):
+                videos.append(video)
+
+            # Check if there are more videos
+            if response_json.get('hasMore'):
+                max_cursor = response_json.get('maxCursor')
+                logging.debug(f"Max Cursor Value: {max_cursor}")
+                while response_json.get('hasMore'):
+                    data["cursor"] = max_cursor #Update cursor value
+                    logging.debug(f"Updated Request Data: {data}")
+                    response_json = make_api_request(url, headers, data)
+                    if response_json:
+                        for video in response_json.get('data', {}).get('videos', []):
+                            videos.append(video)
+                        max_cursor = response_json.get('maxCursor')
+                    else:
+                        break
+            else:
+                logging.info("No more videos to fetch.")
+
+        start_date = current_end_date
+
+    return videos
+
+fvd_tiktok_videos_2 = pd.DataFrame(get_tiktok_videos('forumvdemocratie'))
+
+#Combine first and second part of DF
+fvd_tiktok_videos_comb = pd.concat([fvd_tiktok_videos, fvd_tiktok_videos_2], ignore_index=True)
+print("Combined DataFrame:")
+print(display(fvd_tiktok_videos_comb.head()))
+
+#Organise columns
+fvd_tiktok_videos_comb = pd.DataFrame(fvd_tiktok_videos_comb, columns=["id", "create_time", "video_description", "hashtag_names", "view_count", "like_count", "share_count", "comment_count", "voice_to_text"])
+fvd_tiktok_videos_comb.info()
+print("DataFrame with columns reorganised:")
+print(display(fvd_tiktok_videos_comb.head()))
+
+#Convert create_time to a readable timestamp, reorganise columns and organise chronologically
+fvd_tiktok_videos_comb["time_created"] = pd.to_datetime(fvd_tiktok_videos_comb["create_time"], unit="s")
+fvd_tiktok_videos_comb = pd.DataFrame(fvd_tiktok_videos_comb, columns=["id", "time_created", "video_description", "hashtag_names", "view_count", "like_count", "share_count", "comment_count", "voice_to_text", "create_time"])
+fvd_tiktok_videos_comb = fvd_tiktok_videos_comb.sort_values(by="time_created", ascending=True)
+fvd_tiktok_videos_comb.info()
+print("DataFrame readable create time column:")
+print(display(fvd_tiktok_videos_comb.head()))
+
+<h1>Plotting activity and engagement</h1>
+#####Plot activity over time
+import matplotlib.pyplot as plt
+
+# Plot posting frequency over time
+# Convert 'time_created' column to string type
+fvd_tiktok_videos_comb['time_created'] = fvd_tiktok_videos_comb['time_created'].astype(str)
+fvd_tiktok_videos_comb['month'] = fvd_tiktok_videos_comb["time_created"].str[:7] + '-01'
+fvd_tiktok_videos_comb['month'] = pd.to_datetime(fvd_tiktok_videos_comb['month']) 
+fig, ax = plt.subplots(figsize=(10,6))
+
+# Group the posts per month, then count, and plot the result!
+fvd_tiktok_videos_comb.groupby(['month'])['id'].count().plot(ax=ax, marker='o', lw=1,label='Videos per month')
+
+# Some style
+ax.set_xlabel('Month')
+ax.set_ylabel('Number of posts')
+ax.set_title("FvD TikTok posting frequency over time")
+
+# Let's add vertical lines for the elections
+ax.axvline('2021-03-17', color='green', linestyle='--',label='House of Representatives Elections 2021')
+ax.axvline('2022-03-16', color='red', linestyle='--',label='Municipal Elections 2022')
+ax.axvline('2023-03-15', color='blue', linestyle=':',label='Provincial Elections 2023')
+ax.axvline('2023-11-22', color='magenta', linestyle=':',label='House of Representatives Elections 2023')
+
+ax.grid(True)
+
+# Set legend
+legend = ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, frameon=False)
+fig.tight_layout()
+fig.subplots_adjust(bottom=0.3)
+
+plt.show()
+
+#Plot view count
+fig, ax = plt.subplots(figsize=(10,6))
+# Group the posts per month, then count, and plot the result!
+fvd_tiktok_videos_comb.groupby(['month'])['view_count'].mean().plot(ax=ax, marker='o', lw=1,label='Average view count per month')
+
+# Some style
+ax.set_xlabel('Month')
+ax.set_ylabel('Count')
+ax.set_title("FvD average view count over time")
+
+# Let's add vertical lines for the elections
+ax.axvline('2021-03-17', color='green', linestyle='--',label='House of Representatives Elections 2021')
+ax.axvline('2022-03-16', color='red', linestyle='--',label='Municipal Elections 2022')
+ax.axvline('2023-03-15', color='blue', linestyle=':',label='Provincial Elections 2023')
+ax.axvline('2023-11-22', color='magenta', linestyle=':',label='House of Representatives Elections 2023')
+
+ax.grid(True)
+
+# Set legend
+legend = ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, frameon=False)
+fig.tight_layout()
+fig.subplots_adjust(bottom=0.1)
+
+print(plt.show())
+
+#Plot like and share count
+fig, ax = plt.subplots(figsize=(10,6))
+# Group the posts per month, then count, and plot the result!
+fvd_tiktok_videos_comb.groupby(['month'])['like_count'].mean().plot(ax=ax, marker='o', lw=1,label='Average like count per month')
+fvd_tiktok_videos_comb.groupby(['month'])['share_count'].mean().plot(ax=ax, marker='o', lw=1,label='Average share count per month')
+
+# Some style
+ax.set_xlabel('Month')
+ax.set_ylabel('Count')
+ax.set_title("FvD average like and share count over time")
+
+# Let's add vertical lines for the elections
+ax.axvline('2021-03-17', color='green', linestyle='--',label='House of Representatives Elections 2021')
+ax.axvline('2022-03-16', color='red', linestyle='--',label='Municipal Elections 2022')
+ax.axvline('2023-03-15', color='blue', linestyle=':',label='Provincial Elections 2023')
+ax.axvline('2023-11-22', color='magenta', linestyle=':',label='House of Representatives Elections 2023')
+
+ax.grid(True)
+
+# Set legend
+legend = ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, frameon=False)
+fig.tight_layout()
+fig.subplots_adjust(bottom=0.1)
+
+print(plt.show())
+
+#Plot comment count
+fig, ax = plt.subplots(figsize=(10,6))
+# Group the posts per month, then count, and plot the result!
+fvd_tiktok_videos_comb.groupby(['month'])['comment_count'].mean().plot(ax=ax, marker='o', lw=1,label='Average comment count per month')
+
+# Some style
+ax.set_xlabel('Month')
+ax.set_ylabel('Count')
+ax.set_title("FvD average comment count over time")
+
+# Let's add vertical lines for the elections
+ax.axvline('2021-03-17', color='green', linestyle='--',label='House of Representatives Elections 2021')
+ax.axvline('2022-03-16', color='red', linestyle='--',label='Municipal Elections 2022')
+ax.axvline('2023-03-15', color='blue', linestyle=':',label='Provincial Elections 2023')
+ax.axvline('2023-11-22', color='magenta', linestyle=':',label='House of Representatives Elections 2023')
+
+ax.grid(True)
+
+# Set legend
+legend = ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, frameon=False)
+fig.tight_layout()
+fig.subplots_adjust(bottom=0.1)
+
+print(plt.show())
+
+<h1>Preprocessing video data for topic modelling</h1>
+import numpy as np
+import re
+from numpy import triu
+import numpy
+import scipy
+import gensim
+from gensim import corpora, models
+import nltk
+from nltk.stem import PorterStemmer
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import word_tokenize
+import math
+from collections import Counter
+
+# Download necessary NLTK data files
+#nltk.download('punkt')
+#nltk.download('wordnet')
+
+# Initialize lemmatizer
+lemmatizer = WordNetLemmatizer()
+
+###Preprocessing
+
+##Text cleaning
+def clean_text(text):
+    # Remove URLs
+    text = re.sub(r'http\S+', '', text)
+    # Remove hashtags (and the word following the hashtag)
+    text = re.sub(r'#\w+', '', text)
+    # Remove special characters and numbers
+    text = re.sub(r'[^A-Za-z\s]', '', text)
+    # Remove additional white spaces
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+##Case normalisation
+def case_normalization(text):
+    return text.lower()
+
+##Tokenisation
+def tokenization(text):
+    return text.split()
+
+##Remove stopwords (predefined list in Dutch)
+stopwordlistNL = set(["aan","af","al","als","bij","dan","dat","die","dit","een","en","er","had","heb","hem","het","hij","hoe","hun","ik","in","is","je","kan","me","men","met","mij","nog","nu","of","ons","ook","te","tot","uit","van","was","wat","we","wel","wij","zal","ze","zei","zij","zo","zou","aangaande","aangezien","achter","achterna","afgelopen","aldaar","aldus","alhoewel","alias","alle","allebei","alleen","alsnog","altijd","altoos","ander","andere","anders","anderszins","behalve","behoudens","beide","beiden","ben","beneden","bent","bepaald","betreffende","binnen","binnenin","boven","bovenal","bovendien","bovengenoemd","bovenstaand","bovenvermeld","buiten","daar","daarheen","daarin","daarna","daarnet","daarom","daarop","daarvanlangs","de","dikwijls","door","doorgaand","dus","echter","eer","eerdat","eerder","eerlang","eerst","elk","elke","enig","enigszins","enkel","erdoor","even","eveneens","evenwel","gauw","gedurende","geen","gehad","gekund","geleden","gelijk","gemoeten","gemogen","geweest","gewoon","gewoonweg","haar","hadden","hare","hebben","hebt","heeft","hen","hierbeneden","hierboven","hoewel","hunne","ikzelf","inmiddels","inzake","jezelf","jij","jijzelf","jou","jouw","jouwe","juist","jullie","klaar","kon","konden","krachtens","kunnen","kunt","later","liever","maar","mag","meer","mezelf","mijn","mijnent","mijner","mijzelf","misschien","mocht","mochten","moest","moesten","moet","moeten","mogen","na","naar","nadat","net","niet","noch","nogal","ofschoon","om","omdat","omhoog","omlaag","omstreeks","omtrent","omver","onder","ondertussen","ongeveer","onszelf","onze","op","opnieuw","opzij","over","overeind","overigens","pas","precies","reeds","rond","rondom","sedert","sinds","sindsdien","slechts","sommige","spoedig","steeds","tamelijk","tenzij","terwijl","thans","tijdens","toch","toen","toenmaals","toenmalig","totdat","tussen","uitgezonderd","vaakwat","vandaan","vanuit","vanwege","veeleer","verder","vervolgens","vol","volgens","voor","vooraf","vooral","vooralsnog","voorbij","voordat","voordezen","voordien","voorheen","voorop","vooruit","vrij","vroeg","waar","waarom","wanneer","want","waren","weer","weg","wegens","weldra","welk","welke","wie","wiens","wier","wijzelf","zelfs","zichzelf","zijn","zijne","zodra","zonder","zouden","zowat","zulke","zullen","zult"])
+def remove_stopwords(tokens):
+    return [token for token in tokens if token not in stopwordlistNL]
+
+##Lemmatisation
+def lemmatize(tokens):
+    # Perform lemmatization
+    return [lemmatizer.lemmatize(token) for token in tokens]
+
+###Clean the data in video_description of videos
+
+#Original
+print("Original:")
+print(fvd_tiktok_videos_comb["video_description"])
+
+# Apply preprocessing to the video_description column and create a new column
+fvd_tiktok_videos_comb['cleaned_video_description'] = fvd_tiktok_videos_comb['video_description'].apply(clean_text)
+fvd_tiktok_videos_comb.head()
+
+#Clean text
+print("Clean text:")
+print(fvd_tiktok_videos_comb["cleaned_video_description"])
+
+<h1>Text representation and topic modelling</h1>
+<h2>Topic modelling with LDA</h2>
+###Video descriptions
+
+# Apply all preprocessing functions
+fvd_tiktok_videos_comb['tokens'] = fvd_tiktok_videos_comb["cleaned_video_description"].apply(clean_text).apply(case_normalization).apply(tokenization).apply(remove_stopwords).apply(lemmatize)
+
+# Create a dictionary and corpus needed for Topic Modeling
+dictionary = corpora.Dictionary(fvd_tiktok_videos_comb['tokens']) 
+corpus = [dictionary.doc2bow(text) for text in fvd_tiktok_videos_comb['tokens']] 
+
+# LDA model
+lda_model = gensim.models.ldamodel.LdaModel(corpus=corpus,
+                                           id2word=dictionary,
+                                           num_topics=10, 
+                                           random_state=100,
+                                           update_every=1,
+                                           chunksize=100,
+                                           passes=10,
+                                           alpha='auto',
+                                           per_word_topics=True)
+
+#Print topics and their words
+# Extract topics and their words
+topics = lda_model.print_topics(num_words=10)
+# Create a list to hold topic data
+topic_data = []
+for topic_num, topic in topics:
+    # Parse the topic output to show only words
+    words = ", ".join([word.split("*")[1].replace('"', '') for word in topic.split("+")])
+    topic_data.append([topic_num + 1, words])
+
+# Create a DataFrame
+df_topics = pd.DataFrame(topic_data, columns=['Topic Number', 'Keywords'])
+
+# Display the DataFrame
+display(df_topics)
+
+# Function to format topics and sentences
+def format_topics_sentences(ldamodel=None, corpus=corpus, texts=None):
+    # Init output
+    sent_topics_df = pd.DataFrame()
+
+    # Get main topic in each document
+    for i, row_list in enumerate(ldamodel[corpus]):
+        row = row_list[0] if ldamodel.per_word_topics else row_list            
+        row = sorted(row, key=lambda x: (x[1]), reverse=True)
+        # Get the Dominant topic, Perc Contribution and Keywords for each document
+        for j, (topic_num, prop_topic) in enumerate(row):
+            if j == 0:  # => dominant topic
+                wp = ldamodel.show_topic(topic_num)
+                topic_keywords = ", ".join([word for word, prop in wp])
+                sent_topics_df = pd.concat([sent_topics_df, pd.DataFrame([[int(topic_num), round(prop_topic, 4), topic_keywords]])], ignore_index=True)
+            else:
+                break
+    sent_topics_df.columns = ['Dominant_Topic', 'Perc_Contribution', 'Topic_Keywords']
+
+    # Add original text to the end of the output
+    contents = pd.Series(texts)
+    sent_topics_df = pd.concat([sent_topics_df, contents.reset_index(drop=True)], axis=1)
+    return(sent_topics_df)
+
+# Format topics and sentences
+df_topic_sents_keywords = format_topics_sentences(ldamodel=lda_model, corpus=corpus, texts=fvd_tiktok_videos_comb['cleaned_video_description'])
+
+# Format
+df_dominant_topic = df_topic_sents_keywords.reset_index()
+df_dominant_topic.columns = ['Document_No', 'Dominant_Topic', 'Topic_Perc_Contrib', 'Keywords', 'Text']
+print(display(df_dominant_topic.head()))
+
+#Check if both DF are stored correctly
+print("General fvd tiktok videos DataFrame:")
+#print(display(fvd_tiktok_videos_comb.head(5)))
+print()
+print("Output Topic modeling:")
+#print(display(df_dominant_topic.head(5)))
+
+#Add columns from df_dominant_topic to fvd_tiktok
+fvd_tiktok_videos_comb["Dominant_Topic"] = df_dominant_topic["Dominant_Topic"].values
+fvd_tiktok_videos_comb["Topic_Perc_Contrib"] = df_dominant_topic["Topic_Perc_Contrib"].values
+fvd_tiktok_videos_comb["topic_Keywords"] = df_dominant_topic["Keywords"].values
+#print(display(fvd_tiktok_videos_comb.head(5)))
+
+#Organise columns
+fvd_tiktok_videos_comb = pd.DataFrame(fvd_tiktok_videos_comb, columns=["id", "time_created", "month", "create_time", "view_count", "like_count", "share_count", "comment_count", "voice_to_text", "hashtag_names", "video_description", "cleaned_video_description", "tokens", "Dominant_Topic", "topic_Keywords", "Topic_Perc_Contrib"])
+pd.set_option('display.max_colwidth', 80)
+fvd_tiktok_videos_comb.info()
+print("DataFrame with columns reorganised:")
+print(display(fvd_tiktok_videos_comb.head()))
+
+# Save DataFrame to a CSV file
+fvd_tiktok_videos_comb.to_csv("fvd_tiktok_videos.csv", index=False)
+
+# Gensim
+import gensim
+import gensim.corpora as corpora
+from gensim.utils import simple_preprocess
+from gensim.models import CoherenceModel
+import gensim
+from gensim import corpora, models
+import nltk
+from nltk.stem import PorterStemmer
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import word_tokenize
+import math
+from collections import Counter
+
+texts = fvd_tiktok_videos_comb['tokens']
+coherence_model_lda = CoherenceModel(model=lda_model, texts=texts, dictionary=dictionary, coherence='c_v')
+coherence_lda = coherence_model_lda.get_coherence()
+
+# Compute Perplexity
+print('\nPerplexity: ', lda_model.log_perplexity(corpus))  # a measure of how good the model is. lower the better.
+
+# Compute Coherence Score
+print('\nCoherence Score: ', coherence_lda)
+
+def compute_coherence_values(dictionary, corpus, texts, limit, start=2, step=3):
+    coherence_values = []
+    model_list = []
+    for num_topics in range(start, limit, step):
+        lda_model = gensim.models.ldamodel.LdaModel(corpus=corpus,
+                                           id2word=dictionary,
+                                           num_topics=num_topics, 
+                                           random_state=100,
+                                           update_every=1,
+                                           chunksize=100,
+                                           passes=10,
+                                           alpha='auto',
+                                           per_word_topics=True)
+        model_list.append(lda_model)
+        coherencemodel = CoherenceModel(model=lda_model, texts=texts, dictionary=dictionary, coherence='c_v')
+        coherence_values.append(coherencemodel.get_coherence())
+
+    return model_list, coherence_values
+# Can take a long time to run.
+model_list, coherence_values = compute_coherence_values(dictionary=dictionary, corpus=corpus, texts=texts, start=2, limit=40, step=1)
+
+# Show graph
+limit=40; start=2; step=1
+x = range(start, limit, step)
+plt.plot(x, coherence_values)
+plt.xlabel("Num Topics")
+plt.ylabel("Coherence score")
+plt.legend(("coherence_values"), loc='best')
+plt.suptitle('Coherence scores for FvD TikTok Video Descriptions (k=2-40)', fontsize=12)
+plt.show()
+
+# Create a DataFrame containing the number of topics and coherence values
+coherence_df = pd.DataFrame({'Num Topics': x, 'Coherence Value': coherence_values})
+
+# Print the coherence scores DataFrame
+print(display(coherence_df))
+
+# Select the model and print the topics
+optimal_model = model_list[3]
+model_topics = optimal_model.show_topics(formatted=True)
+print(optimal_model.print_topics(num_words=10))
+
+# Find the number of topics with the highest coherence value
+optimal_num_topics = range(2, 40, 1)[coherence_values.index(max(coherence_values))]
+print(f'Optimal number of topics: {optimal_num_topics}')
+
+import pyLDAvis.gensim_models as gensimvis
+import pyLDAvis
+
+# Prepare the visualization data
+lda_display = gensimvis.prepare(lda_model, corpus, dictionary)
+
+# Alternatively, you can save the visualization to an HTML file
+pyLDAvis.save_html(lda_display, 'lda_topics_visualization.html')
+
+# Display the visualization
+pyLDAvis.display(lda_display)
+
+<h1>Plotting the topics</h1>
+#!pip3 install wordcloud
+from matplotlib import pyplot as plt
+from wordcloud import WordCloud, STOPWORDS
+import matplotlib.colors as mcolors
+
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+
+# Initialize the word cloud object
+cloud = WordCloud(stopwords=stopwordlistNL,
+                  background_color='white',
+                  width=2500,
+                  height=1800,
+                  max_words=10,
+                  prefer_horizontal=1.0)
+
+# Define theme colors directly
+theme_colors = {
+    'Theme: Culture and Identity': 'blue',
+    'Theme: Making the Political Personal': 'orange',
+    'Theme: FvD vs. the Elites': 'green',
+    'Theme: Alternatives for the Netherlands': 'red'
+}
+
+# Create a plot for each theme
+for theme, topics in fvd_tiktok_themes.items():
+    # Create a new figure for each theme
+    fig, axes = plt.subplots(1, len(topics), figsize=(14, 5))
+
+    # Loop through each topic in the theme
+    for i, topic in enumerate(topics):
+        # Get the corresponding subplot
+        ax = axes[i]
+
+        # Generate word cloud for the topic
+        topic_words = dict(lda_model.show_topic(topic, topn=10))
+        cloud.generate_from_frequencies(topic_words)
+
+        # Define color for the topic
+        color = theme_colors[theme]
+
+        # Plot the word cloud in the subplot with the specified color
+        ax.imshow(cloud.recolor(color_func=lambda *args, **kwargs: color))
+        ax.set_title(topic_names[topic], fontdict=dict(size=16))
+        ax.axis('off')
+
+    # Set the title of the plot as the theme
+    fig.suptitle(theme, fontsize=18)
+    fig.subplots_adjust(top=0.8)  # Adjust top space for the title
+
+    # Hide empty subplots
+    for i in range(len(topics), len(axes)):
+        axes[i].axis('off')
+
+    plt.show()
+
+import matplotlib.pyplot as plt
+import pandas as pd
+
+###Plotting posting frequency
+# Convert 'time_created' column to string type
+fvd_tiktok_videos_comb['time_created'] = fvd_tiktok_videos_comb['time_created'].astype(str)
+fvd_tiktok_videos_comb['month'] = fvd_tiktok_videos_comb["time_created"].str[:7] + '-01'
+fvd_tiktok_videos_comb['month'] = pd.to_datetime(fvd_tiktok_videos_comb['month'])
+
+# Group by month and dominant topic, then count
+topic_month_counts = fvd_tiktok_videos_comb.groupby(['month', 'Dominant_Topic'])['id'].count().unstack().fillna(0)
+
+# Define a dictionary mapping topic numbers to names
+topic_names = {
+    0: 'Topic 1: Culture and Identity',
+    1: 'Topic 2: Political Mobilisation',
+    2: 'Topic 3: Breaking the Cartel',
+    3: 'Topic 4: The Power of Elites',
+    4: 'Topic 5: FvD as the True Alternative',
+    5: 'Topic 6: FvDs People and Personalities',
+    6: 'Topic 7: Threat to Dutch Identity',
+    7: 'Topic 8: #Baudetheeftgelijk',
+    8: 'Topic 9: FvDs Party Positions',
+    9: 'Topic 10: FvD vs. the Elites'
+}
+
+# Plotting Posting frequency
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Plot for each topic
+num_topics = topic_month_counts.shape[1]
+colors = plt.cm.tab10.colors  # Use a colormap for better distinction between topics
+
+for topic in range(num_topics):
+    if topic in topic_month_counts.columns:
+        topic_label = topic_names.get(topic, f'Topic {topic+1}')
+        topic_month_counts[topic].plot(ax=ax, marker='o', lw=1, label=topic_label, color=colors[topic % len(colors)])
+
+# Group by month to get the total number of posts per month
+total_posts = fvd_tiktok_videos_comb.groupby('month')['id'].count()
+# Plot the total number of posts per month
+total_posts.plot(ax=ax, marker='o', lw=1.5, linestyle='--', color='black', label='Total')
+
+# Some style
+ax.set_xlabel('Month')
+ax.set_ylabel('Count')
+ax.set_title("FvD TikTok posting frequency over time by dominant topic per month")
+
+# Adding vertical lines for the elections
+election_dates = ['2021-03-17', '2022-03-16', '2023-03-15', '2023-11-22']
+election_labels = [
+    'House of Representatives Elections 2021',
+    'Municipal Elections 2022',
+    'Provincial Elections 2023',
+    'House of Representatives Elections 2023'
+]
+colors = ['green', 'red', 'blue', 'magenta']
+linestyles = ['--', '--', ':', ':']
+
+for date, label, color, linestyle in zip(election_dates, election_labels, colors, linestyles):
+    ax.axvline(pd.to_datetime(date), color=color, linestyle=linestyle, label=label)
+
+ax.grid(True)
+
+# Set legend
+legend = ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, frameon=False)
+fig.tight_layout()
+fig.subplots_adjust(bottom=0.1)
+
+plt.show()
+
+###Plotting view count
+# Group by month and viewcount, then mean
+topic_month_counts2 = fvd_tiktok_videos_comb.groupby(['month', 'Dominant_Topic'])['view_count'].mean().unstack().fillna(0)
+
+# Plotting view count
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Plot for each topic
+num_topics = topic_month_counts2.shape[1]
+colors = plt.cm.tab10.colors  # Use a colormap for better distinction between topics
+
+for topic in range(num_topics):
+    if topic in topic_month_counts2.columns:
+        topic_label = topic_names.get(topic, f'Topic {topic+1}')
+        topic_month_counts2[topic].plot(ax=ax, marker='o', lw=1, label=topic_label, color=colors[topic % len(colors)])
+
+# Group by month to get the total number of posts per month
+total_posts = fvd_tiktok_videos_comb.groupby('month')['view_count'].mean()
+# Plot the total number of posts per month
+total_posts.plot(ax=ax, marker='o', lw=1.5, linestyle='--', color='black', label='Total')
+
+# Some style
+ax.set_xlabel('Month')
+ax.set_ylabel('Count')
+ax.set_title("Average view count of FvD TikTok videos over time by dominant topic per month")
+
+# Adding vertical lines for the elections
+election_dates = ['2021-03-17', '2022-03-16', '2023-03-15', '2023-11-22']
+election_labels = [
+    'House of Representatives Elections 2021',
+    'Municipal Elections 2022',
+    'Provincial Elections 2023',
+    'House of Representatives Elections 2023'
+]
+colors = ['green', 'red', 'blue', 'magenta']
+linestyles = ['--', '--', ':', ':']
+
+for date, label, color, linestyle in zip(election_dates, election_labels, colors, linestyles):
+    ax.axvline(pd.to_datetime(date), color=color, linestyle=linestyle, label=label)
+
+ax.grid(True)
+
+# Set legend
+legend = ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, frameon=False)
+fig.tight_layout()
+fig.subplots_adjust(bottom=0.1)
+
+plt.show()
+
+###Plotting like count
+# Group by month and like count, then mean
+topic_month_counts2 = fvd_tiktok_videos_comb.groupby(['month', 'Dominant_Topic'])['like_count'].mean().unstack().fillna(0)
+
+# Plotting 
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Plot for each topic
+num_topics = topic_month_counts2.shape[1]
+colors = plt.cm.tab10.colors  # Use a colormap for better distinction between topics
+
+for topic in range(num_topics):
+    if topic in topic_month_counts2.columns:
+        topic_label = topic_names.get(topic, f'Topic {topic+1}')
+        topic_month_counts2[topic].plot(ax=ax, marker='o', lw=1, label=topic_label, color=colors[topic % len(colors)])
+
+# Group by month to get the total number of posts per month
+total_posts = fvd_tiktok_videos_comb.groupby('month')['like_count'].mean()
+# Plot the total number of posts per month
+total_posts.plot(ax=ax, marker='o', lw=1.5, linestyle='--', color='black', label='Total')
+
+# Some style
+ax.set_xlabel('Month')
+ax.set_ylabel('Count')
+ax.set_title("Average like count of FvD TikTok videos over time by dominant topic per month")
+
+# Adding vertical lines for the elections
+election_dates = ['2021-03-17', '2022-03-16', '2023-03-15', '2023-11-22']
+election_labels = [
+    'House of Representatives Elections 2021',
+    'Municipal Elections 2022',
+    'Provincial Elections 2023',
+    'House of Representatives Elections 2023'
+]
+colors = ['green', 'red', 'blue', 'magenta']
+linestyles = ['--', '--', ':', ':']
+
+for date, label, color, linestyle in zip(election_dates, election_labels, colors, linestyles):
+    ax.axvline(pd.to_datetime(date), color=color, linestyle=linestyle, label=label)
+
+ax.grid(True)
+
+# Set legend
+legend = ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, frameon=False)
+fig.tight_layout()
+fig.subplots_adjust(bottom=0.1)
+
+plt.show()
+
+###Plotting share count
+# Group by month and like count, then mean
+topic_month_counts2 = fvd_tiktok_videos_comb.groupby(['month', 'Dominant_Topic'])['share_count'].mean().unstack().fillna(0)
+
+# Plotting 
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Plot for each topic
+num_topics = topic_month_counts2.shape[1]
+colors = plt.cm.tab10.colors  # Use a colormap for better distinction between topics
+
+for topic in range(num_topics):
+    if topic in topic_month_counts2.columns:
+        topic_label = topic_names.get(topic, f'Topic {topic+1}')
+        topic_month_counts2[topic].plot(ax=ax, marker='o', lw=1, label=topic_label, color=colors[topic % len(colors)])
+
+# Group by month to get the total number of posts per month
+total_posts = fvd_tiktok_videos_comb.groupby('month')['share_count'].mean()
+# Plot the total number of posts per month
+total_posts.plot(ax=ax, marker='o', lw=1.5, linestyle='--', color='black', label='Total')
+
+# Some style
+ax.set_xlabel('Month')
+ax.set_ylabel('Count')
+ax.set_title("Average share count of FvD TikTok videos over time by dominant topic per month")
+
+# Adding vertical lines for the elections
+election_dates = ['2021-03-17', '2022-03-16', '2023-03-15', '2023-11-22']
+election_labels = [
+    'House of Representatives Elections 2021',
+    'Municipal Elections 2022',
+    'Provincial Elections 2023',
+    'House of Representatives Elections 2023'
+]
+colors = ['green', 'red', 'blue', 'magenta']
+linestyles = ['--', '--', ':', ':']
+
+for date, label, color, linestyle in zip(election_dates, election_labels, colors, linestyles):
+    ax.axvline(pd.to_datetime(date), color=color, linestyle=linestyle, label=label)
+
+ax.grid(True)
+
+# Set legend
+legend = ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, frameon=False)
+fig.tight_layout()
+fig.subplots_adjust(bottom=0.1)
+
+plt.show()
+
+###Plotting comment count
+# Group by month and like count, then mean
+topic_month_counts2 = fvd_tiktok_videos_comb.groupby(['month', 'Dominant_Topic'])['comment_count'].mean().unstack().fillna(0)
+
+# Plotting 
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Plot for each topic
+num_topics = topic_month_counts2.shape[1]
+colors = plt.cm.tab10.colors  # Use a colormap for better distinction between topics
+
+for topic in range(num_topics):
+    if topic in topic_month_counts2.columns:
+        topic_label = topic_names.get(topic, f'Topic {topic+1}')
+        topic_month_counts2[topic].plot(ax=ax, marker='o', lw=1, label=topic_label, color=colors[topic % len(colors)])
+
+# Group by month to get the total number of posts per month
+total_posts = fvd_tiktok_videos_comb.groupby('month')['comment_count'].mean()
+# Plot the total number of posts per month
+total_posts.plot(ax=ax, marker='o', lw=1.5, linestyle='--', color='black', label='Total')
+
+# Some style
+ax.set_xlabel('Month')
+ax.set_ylabel('Count')
+ax.set_title("Average comment count of FvD TikTok videos over time by dominant topic per month")
+
+# Adding vertical lines for the elections
+election_dates = ['2021-03-17', '2022-03-16', '2023-03-15', '2023-11-22', "2024-06-06"]
+election_labels = [
+    'House of Representatives Elections 2021',
+    'Municipal Elections 2022',
+    'Provincial Elections 2023',
+    'House of Representatives Elections 2023',
+    "European Union Elections 2024"
+]
+colors = ['green', 'red', 'blue', 'magenta']
+linestyles = ['--', '--', ':', ':']
+
+for date, label, color, linestyle in zip(election_dates, election_labels, colors, linestyles):
+    ax.axvline(pd.to_datetime(date), color=color, linestyle=linestyle, label=label)
+
+ax.grid(True)
+
+# Set legend
+legend = ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, frameon=False)
+fig.tight_layout()
+fig.subplots_adjust(bottom=0.1)
+
+plt.show()
+
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# Convert 'time_created' column to string type
+fvd_tiktok_videos_comb['time_created'] = fvd_tiktok_videos_comb['time_created'].astype(str)
+fvd_tiktok_videos_comb['month'] = fvd_tiktok_videos_comb["time_created"].str[:7] + '-01'
+fvd_tiktok_videos_comb['month'] = pd.to_datetime(fvd_tiktok_videos_comb['month'])
+
+# Example of overarching themes
+fvd_tiktok_themes = {
+    'Theme: Culture and Identity': [0, 6],
+    'Theme: Making the Political Personal': [1, 5, 7],
+    'Theme: FvD vs. the Elites': [2, 3, 9],
+    'Theme: Alternatives for the Netherlands': [4, 8]
+}
+
+# Initialize dictionaries to store metrics for each theme
+metrics = {
+    'posting_frequency': {},
+    'view_count': {},
+    'like_count': {},
+    'share_count': {},
+    'comment_count': {}
+}
+
+# Aggregate metrics for each theme
+for theme, topics in fvd_tiktok_themes.items():
+    for topic in topics:
+        theme_data = fvd_tiktok_videos_comb[fvd_tiktok_videos_comb['Dominant_Topic'] == topic]
+        metrics['posting_frequency'][(theme, topic)] = theme_data.groupby('month')['id'].count()
+        metrics['view_count'][(theme, topic)] = theme_data.groupby('month')['view_count'].mean()
+        metrics['like_count'][(theme, topic)] = theme_data.groupby('month')['like_count'].mean()
+        metrics['share_count'][(theme, topic)] = theme_data.groupby('month')['share_count'].mean()
+        metrics['comment_count'][(theme, topic)] = theme_data.groupby('month')['comment_count'].mean()
+
+def add_election_lines(ax):
+    election_dates = ['2021-03-17', '2022-03-16', '2023-03-15', '2023-11-22', "2024-06-06"]
+    election_labels = [
+        'House of Representatives Elections 2021',
+        'Municipal Elections 2022',
+        'Provincial Elections 2023',
+        'House of Representatives Elections 2023',
+        "European Union Elections 2024"
+    ]
+    colors = ['green', 'red', 'blue', 'magenta']
+    linestyles = ['--', '--', ':', ':']
+
+    for date, label, color, linestyle in zip(election_dates, election_labels, colors, linestyles):
+        ax.axvline(pd.to_datetime(date), color=color, linestyle=linestyle, label=label)
+
+# Function to plot posting frequency
+def plot_posting_frequency(theme):
+    fig_pf, ax_pf = plt.subplots(figsize=(10, 6))
+
+    # Plot posting frequency for each topic in the theme
+    for topic in fvd_tiktok_themes[theme]:
+        metrics['posting_frequency'][(theme, topic)].plot(ax=ax_pf, marker='o', lw=1, label=topic_names[topic])
+
+    # Style
+    ax_pf.set_xlabel('Month')
+    ax_pf.set_ylabel('Number of Posts')
+    ax_pf.set_title(f"Posting Frequency Over Time - {theme}")
+
+    # Add election lines
+    add_election_lines(ax_pf)
+
+    ax_pf.grid(True)
+    ax_pf.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, frameon=False)
+    fig_pf.tight_layout()
+    fig_pf.subplots_adjust(bottom=0.3)
+    plt.show()
+
+# Function to plot engagement metrics with larger size and election lines
+def plot_engagement_metrics(theme):
+    fig_engagement, axs_engagement = plt.subplots(2, 2, figsize=(20, 15), sharex=True)
+
+    # Plot each engagement metric using mean
+    metric_names = ['view_count', 'like_count', 'share_count', 'comment_count']
+    titles = ['Average View Count', 'Average Like Count', 'Average Share Count', 'Average Comment Count']
+
+    for ax, metric, title in zip(axs_engagement.flatten(), metric_names, titles):
+        for topic in fvd_tiktok_themes[theme]:
+            metrics[metric][(theme, topic)].plot(ax=ax, marker='o', lw=1, label=topic_names[topic])
+        ax.set_title(title, fontsize=16)
+        ax.set_xlabel('Month', fontsize=14)
+        ax.set_ylabel('Average Count', fontsize=14)
+        ax.grid(True)
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, frameon=False)
+        add_election_lines(ax)  # Add election lines to each subplot
+
+    fig_engagement.suptitle(f"Engagement Metrics Over Time - {theme}", fontsize=18)
+    fig_engagement.tight_layout()
+    fig_engagement.subplots_adjust(top=0.9, bottom=-0.1)
+    plt.show()
+
+# Plot for each theme
+for theme in fvd_tiktok_themes:
+    plot_posting_frequency(theme)
+    plot_engagement_metrics(theme)
